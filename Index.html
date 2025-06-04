@@ -1,1 +1,15 @@
 const contractAddress = "0x6c84E23531Fd951909c0f6914A89522a2E43D12F";
+const approveTokens = async () => {
+  try {
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const contract = new ethers.Contract(contractAddress, TIFTokenABI, signer);
+    const amount = ethers.utils.parseUnits("10", 18);
+    const tx = await contract.approve("0xAdresseSpender", amount);
+    setSuccess("Autorisation envoyée ! Hash : " + tx.hash);
+    await tx.wait();
+    setSuccess("Autorisation réussie !");
+  } catch (err) {
+    setError("Erreur : " + err.message);
+  }
+};
