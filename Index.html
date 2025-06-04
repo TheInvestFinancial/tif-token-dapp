@@ -1,15 +1,164 @@
 const contractAddress = "0x6c84E23531Fd951909c0f6914A89522a2E43D12F";
-const approveTokens = async () => {
-  try {
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const signer = provider.getSigner();
-    const contract = new ethers.Contract(contractAddress, TIFTokenABI, signer);
-    const amount = ethers.utils.parseUnits("10", 18);
-    const tx = await contract.approve("0xAdresseSpender", amount);
-    setSuccess("Autorisation envoyée ! Hash : " + tx.hash);
-    await tx.wait();
-    setSuccess("Autorisation réussie !");
-  } catch (err) {
-    setError("Erreur : " + err.message);
-  }
-};
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TIFToken dApp - The Invest Financial</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const { ethers } = window.ethers;
+
+    // ABI du contrat TIFToken (extrait minimal pour balanceOf et transfer)
+    const TIFTokenABI = [
+      "function balanceOf(address account) public view returns (uint256)",
+      "function transfer(address to, uint256 amount) public returns (bool)",
+      "function decimals() public view returns (uint8)",
+      "function symbol() public view returns (string)"
+    ];
+
+    // Adresse du contrat déployé sur Amoy (remplacez par votre adresse)
+    const contractAddress = "0xVotreAdresseDeContrat"; // À remplacer
+
+    // Composant principal
+    function App() {
+      const [account, setAccount] = useState(null);
+      const [balance, setBalance] = useState("0");
+      const [symbol, setSymbol] = useState("TIF");
+      const [recipient, setRecipient] = useState("");
+      const [amount, setAmount] = useState("");
+      const [error, setError] = useState("");
+      const [success, setSuccess] = useState("");
+
+      // Se connecter à MetaMask
+      const connectWallet = async () => {
+        if (window.ethereum) {
+          try {
+            const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+            setAccount(accounts[0]);
+            // Vérifier que le réseau est Amoy (Chain ID: 80002)
+            const chainId = await window.ethereum.request({ method: "eth_chainId" });
+            if (chainId !== "0x13882") {
+              await window.ethereum.request({
+                method: "wallet_switchEthereumChain",
+                params: [{ chainId: "0x13882" }],
+              });
+            }
+          } catch (err) {
+            setError("Erreur de connexion : " + err.message);
+          }
+        } else {
+          setError("Veuillez installer MetaMask.");
+        }
+      };
+
+      // Récupérer le solde et le symbole
+      const getBalanceAndSymbol = async () => {
+        if (account) {
+          try {
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            const contract = new ethers.Contract(contractAddress, TIFTokenABI, provider);
+            const balance = await contract.balanceOf(account);
+            const decimals = await contract.decimals();
+            const symbol = await contract.symbol();
+            setBalance(ethers.utils.formatUnits(balance, decimals));
+            setSymbol(symbol);
+          } catch (err) {
+            setError("Erreur lors de la récupération du solde : " + err.message);
+          }
+        }
+      };
+
+      // Transférer des TIF
+      const transferTokens = async () => {
+        if (!recipient || !amount) {
+          setError("Veuillez entrer une adresse et un montant.");
+          return;
+        }
+        try {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          const signer = provider.getSigner();
+          const contract = new ethers.Contract(contractAddress, TIFTokenABI, signer);
+          const decimals = await contract.decimals();
+          const amountWei = ethers.utils.parseUnits(amount, decimals);
+          const tx = await contract.transfer(recipient, amountWei);
+          setSuccess("Transaction envoyée ! Hash : " + tx.hash);
+          await tx.wait();
+          setSuccess("Transfert réussi !");
+          setRecipient("");
+          setAmount("");
+          getBalanceAndSymbol(); // Mettre à jour le solde
+        } catch (err) {
+          setError("Erreur lors du transfert : " + err.message);
+        }
+      };
+
+      // Mettre à jour le solde lors de la connexion
+      useEffect(() => {
+        getBalanceAndSymbol();
+      }, [account]);
+
+      return (
+        <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+          <h1 className="text-3xl font-bold mb-6">TIFToken dApp - The Invest Financial</h1>
+          {!account ? (
+            <button
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+              onClick={connectWallet}
+            >
+              Connecter MetaMask
+            </button>
+          ) : (
+            <div className="w-full max-w-md bg-white p-6 rounded shadow">
+              <p className="mb-4">Compte : {account}</p>
+              <p className="mb-4">Solde : {balance} {symbol}</p>
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Adresse du destinataire"
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                  className="w-full p-2 border rounded mb-2"
+                />
+                <input
+                  type="number"
+                  placeholder="Montant en TIF"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full p-2 border rounded mb-2"
+                />
+                <button
+                  className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full"
+                  onClick={transferTokens}
+                >
+                  Transférer TIF
+                </button>
+              </div>
+              {error && <p className="text-red-500">{error}</p>}
+              {success && <p className="text-green-500">{success}</p>}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Rendu de l'application
+    ReactDOM.render(<App />, document.getElementById("root"));
+  </script>
+</body>
+</html><script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
